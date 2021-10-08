@@ -1,0 +1,33 @@
+define(['jquery', 'peggy'], function($, peggy) {
+	/**
+	 * init Function
+	 */
+	function _init(draper, options, callbacks, id) {
+		var target = document.getElementById(id);
+		const banner = peggy.createBanner(draper, target, options, callbacks);
+		banner.mount();
+	}
+
+	function init({ banners, isMobile, isTablet, typeBanner, viewportParam, id}) {
+		if (banners && banners.draper && banners.draper.components) {
+            const bannersFiltered = typeBanner ?
+                banners.draper.components.filter(b => typeBanner != null && b.component_subtype === typeBanner) :
+                banners.draper.components;
+			bannersFiltered.forEach(banner => {
+				const viewport = viewportParam ? viewportParam : isMobile ? 'mobile' : isTablet ? 'cluster' : 'full-width';
+                const meta = {
+                    viewport,
+                    tracking_data: {
+                        ...banners.draper.context,
+                        ...banners.upaData,
+                    }
+                };
+				_init(banner, meta, {}, id);
+			});
+		}
+	}
+
+	return {
+		init: init
+	};
+});

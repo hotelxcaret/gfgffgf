@@ -1,0 +1,213 @@
+define(["jquery", "utils"], function($, Utils) {
+
+    return function() {
+        /*
+        options = {
+            id: string,
+            showDots: boolean,
+            showArrows: boolean,
+            spaceBetween: number,
+            itemsToShow: number,
+            slideBy: number,
+            maxFixedWidth: number
+        }
+         */
+
+        function init(options) {
+            const sliderId = options.id;
+            const screenType = Utils.getScreenType();
+            const $sliderContainer = $(sliderId);
+            const $sliderScrollWrapper = $(sliderId).find('.slider-scroll-wrapper');
+            const $sliderItemList = $(sliderId).find('.slider-item');
+            const $prevArrow = $(sliderId).find('.eva-3-nav-slider.-left')[0];
+            const $nextArrow = $(sliderId).find('.eva-3-nav-slider.-right')[0];
+            const $dots = $(sliderId).find('.dots-container .nav-dot');
+
+            const slideBy = options.slideBy || 1;
+            const itemsToShow = options.itemsToShow || (screenType === 'MOBILE' ? 1 : 2);
+            let pagesCount = ($sliderItemList.length - options.itemsToShow) > 0 ? ($sliderItemList.length - options.itemsToShow) / slideBy : 0;
+            let dotActiveIndex = 0, scrollLeft = 0, scrollLeftPixelsToMove = 0, currentPage = 0;
+
+            let slideItemWidth, startClientX, startClientY, maxScrollLeft;
+
+            // EVENT LISTENER
+            function bindEventListenerDesktop() {
+                $sliderContainer.on('click', '.eva-3-nav-slider', function() {
+                    const action = $(this).hasClass('-left') ? 'prev' : 'next';
+                    moveSlider(action);
+
+                    if (options.showArrows) {
+                        updateArrows();
+                    }
+
+                    if (options.showDots) {
+                        updateDots();
+                    }
+                });
+            }
+
+            function bindEventListenerMobile() {
+                $sliderContainer.on('touchstart', function(e) {
+                    startClientX = e.originalEvent.touches[0].clientX;
+                    startClientY = e.originalEvent.touches[0].clientY;
+                });
+
+                $sliderContainer.on('touchend', function(e) {
+                    const endClientX = e.originalEvent.changedTouches[0].clientX;
+                    const endClientY = e.originalEvent.changedTouches[0].clientY;
+
+                    let isScrolled = Math.abs(startClientY - endClientY) > Math.abs(startClientX - endClientX);
+                    if (!isScrolled) {
+                        const action = startClientX > endClientX ? 'next' : 'prev';
+                        if ((currentPage === 0 && action === 'prev')
+                            || currentPage === pagesCount && action === 'next') {
+                            return null;
+                        }
+
+
+                        if (action === 'prev') {
+                            currentPage--;
+                            dotActiveIndex--;
+                            const sliderItemOffsetLeft = $('.slider-item-' + dotActiveIndex)[0].offsetLeft;
+                            const outWidth = (window.innerWidth - $sliderItemList.width());
+
+                            const pixelsToMove = (sliderItemOffsetLeft - outWidth + options.spaceBetween) * slideBy;
+                            scrollLeft = pixelsToMove > 0 ? -pixelsToMove : 0;
+
+                        } else {
+                            currentPage++;
+                            dotActiveIndex++;
+                            const pixelsToMove = ($('.slider-item-' + dotActiveIndex)[0].offsetLeft - options.spaceBetween) * slideBy;
+                            const isLast = currentPage === pagesCount;
+
+                            if (isLast) {
+                                if (maxScrollLeft == null) {
+                                    maxScrollLeft = $sliderScrollWrapper.width() - window.innerWidth + options.spaceBetween;
+                                }
+
+                                scrollLeft = pixelsToMove >= maxScrollLeft ? - maxScrollLeft : - pixelsToMove;
+
+                            } else {
+                                scrollLeft = - pixelsToMove;
+                            }
+                        }
+
+                        $sliderScrollWrapper[0].style.left = scrollLeft + 'px';
+
+                        if (options.showDots) {
+                            updateDots();
+                        }
+
+                        if (options.showArrows) {
+                            updateArrows();
+                        }
+                    }
+                });
+            }
+
+            // UPDATE ELEMENTS
+            function moveSlider(action) {
+                if (action === 'next') {
+                    dotActiveIndex++;
+                    currentPage++;
+                    scrollLeft -= (scrollLeftPixelsToMove * slideBy);
+                    scrollLeft = scrollLeft < - maxScrollLeft ? - maxScrollLeft : scrollLeft;
+
+                } else {
+                    dotActiveIndex--;
+                    currentPage--;
+                    scrollLeft += (scrollLeftPixelsToMove * slideBy);
+                    scrollLeft = scrollLeft > 0 ? 0 : scrollLeft;
+                }
+
+                $sliderScrollWrapper[0].style.left = scrollLeft + 'px';
+            }
+
+            function updateArrows() {
+                if (currentPage === 0) {
+                    hidePrevArrow();
+                } else {
+                    showPrevArrow();
+                }
+
+                if (pagesCount >= 1 && currentPage < pagesCount) {
+                    showNextArrow();
+                } else {
+                    hideNextArrow();
+                }
+            }
+
+            function updateDots() {
+                $dots.each((index, component) => {
+                    if (index === dotActiveIndex) {
+                        $(component).addClass('-active');
+                    } else {
+                        $(component).removeClass('-active');
+                    }
+                })
+            }
+
+            // UTILS
+            function hidePrevArrow() {
+                if ($prevArrow) {
+                    $prevArrow.style.display = 'none';
+                }
+            }
+
+            function hideNextArrow() {
+                if ($nextArrow) {
+                    $nextArrow.style.display = 'none';
+                }
+            }
+
+            function showPrevArrow() {
+                if ($prevArrow) {
+                    $prevArrow.style.display = 'flex';
+                }
+            }
+
+            function showNextArrow() {
+                if ($nextArrow) {
+                    $nextArrow.style.display = 'flex';
+                }
+            }
+
+            if (screenType !== 'MOBILE') {
+                slideItemWidth = options.maxFixedWidth != null && options.maxFixedWidth < $sliderItemList.innerWidth() ?
+                    options.maxFixedWidth : $sliderItemList.innerWidth();
+
+                slideItemWidth = (slideItemWidth - options.spaceBetween) + (options.spaceBetween / $sliderItemList.length);
+
+                $sliderItemList.each((index, slideItem) => {
+                    if (index < ($sliderItemList.length - 1)) {
+                        slideItem.style.margin = '0 ' + options.spaceBetween + 'px 0 0';
+                    }
+                    slideItem.style.minWidth = slideItemWidth + 'px';
+                });
+
+                scrollLeftPixelsToMove = slideItemWidth + options.spaceBetween;
+                maxScrollLeft = (slideItemWidth * ($sliderItemList.length - itemsToShow)) + (options.spaceBetween * (itemsToShow));
+                const scrollWrapperWidth =  (slideItemWidth * $sliderItemList.length) + (options.spaceBetween * ($sliderItemList.length - 1));
+                $sliderScrollWrapper.css('width', scrollWrapperWidth + 'px');
+
+                options.showArrows && updateArrows();
+                options.showDots && updateDots();
+                bindEventListenerDesktop();
+            } else {
+                slideItemWidth = options.maxFixedWidth != null && options.maxFixedWidth < $sliderItemList.innerWidth() ?
+                    options.maxFixedWidth : $sliderItemList.innerWidth();
+
+                $sliderItemList.each((index, slideItem) => {
+                    slideItem.style.margin = '0 0 0 ' + options.spaceBetween + 'px';
+                    slideItem.style.minWidth = slideItemWidth + 'px';
+                });
+
+                bindEventListenerMobile();
+            }
+        }
+
+        return {
+            init: init
+        }
+    }
+});

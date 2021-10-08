@@ -1,0 +1,242 @@
+"use strict";
+define([], function () {
+    var SmartPicture = /** @class */ (function () {
+        // Constructor.
+        function SmartPicture(images, config) {
+            if (config === void 0) { config = {}; }
+            // Listado de imágenes a cargar.
+            this._images = null;
+            // Cantidad de imágenes cargadas hasta el momento.
+            this._imagesLoaded = 0;
+            // Objeto observer de la API de javascript.
+            this._observer = null;
+            // Diccionario de eventos suscriptos desde el lado de la implementación.
+            this._eventListeners = {};
+            // Validación del parámetro "images".
+            if (images === undefined) {
+                throw new Error('El primer argumento de la clase "SmartPicture" es obligatorio.');
+            }
+            // Validación del tipo del parámetro "images".
+            if (!(images instanceof NodeList)) {
+                throw new TypeError('El primer argumento de la clase "SmartPicture" debe ser del tipo "NodeList".');
+            }
+            // Validación del objeto de configuración de la librería.
+            if (!(config instanceof Object)) {
+                throw new TypeError('El segundo argumento de la clase "SmartPicture" debe ser del tipo "Object".');
+            }
+            // Si no se instancia la clase con la propiedad "retryAttempts" esta será por default = 0.
+            config.retryAttempts = (config.retryAttempts === undefined) ? 0 : config.retryAttempts;
+            // Si no se instancia la clase con la propiedad "retryDelayInMS" esta será por default = 0.
+            config.retryDelayInMS = (config.retryDelayInMS === undefined) ? 0 : config.retryDelayInMS;
+            // Guardo la configuración de la librería.
+            this.setConfig(config);
+            // Guardo el listado de imágenes a cargar.
+            this.images = [];
+            // Instancio la clase "IntersectionObserver" SOLO si tiene soporte.
+            this.observer = (this._hasSupport()) ? new IntersectionObserver(this._imageIntersection.bind(this), config) : null;
+            // Instancio la clase "Map" SOLO si tiene soporte.
+            this._imageStatus = ('Map' in window) ? new Map() : null;
+            this._addImages(images);
+        }
+
+        SmartPicture.prototype._hasSupport = function () {
+            // Verifico si tiene soporte de la clase "IntersectionObserver".
+            return ('IntersectionObserver' in window);
+        };
+
+        SmartPicture.prototype._addImages = function (images) {
+            for (var imageIndex = 0; imageIndex < images.length; imageIndex++) {
+                var target = images[imageIndex];
+                this.images.push(target);
+
+                var image = target.getElementsByTagName('img')[0];
+                // Defino el estado de la imagen.
+                var imageStatus = {
+                    retryAttempts: 0,
+                    hasDataSrcSetAttribute: image.getAttribute('data-srcset') !== null,
+                    hasDataSrcAttribute: image.getAttribute('data-src') !== null
+                };
+                // Validación del atributo "data-src" de la imagen.
+                if (!imageStatus.hasDataSrcAttribute)
+                    throw new TypeError('El atributo "data-src" es obligatorio en la imagen dentro de los elementos Picture.');
+
+                if (this._hasSupport()) {
+                    // Creo el objeto de estado de la imagen y lo guardo en un mapa de correspondencia.
+                    this.setImageStatus(target, imageStatus);
+                    // Si tiene soporte agrego el observer.
+                    this.observer.observe(target);
+
+                } else {
+                    // Si no tiene soporte fuerzo la descarga de la imagen.
+                    this._initializeUnsupportedImage(target);
+                }
+            }
+        };
+
+        SmartPicture.prototype.updateImages = function () {
+            var newImages = document.querySelectorAll( '.smart-picture:not(.loaded)' );
+            this._addImages(newImages);
+        };
+
+        // Este método será llamado cuando el viewport intersecte con la imagen.
+        SmartPicture.prototype._imageIntersection = function (entries) {
+            var _this = this;
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting === undefined || entry.isIntersecting) {
+                    var target = entry.target;
+                    _this._initializeImage(target);
+                }
+            });
+        };
+        // Este método será llamado cuando el browser no tenga soporte de la API.
+        SmartPicture.prototype._initializeUnsupportedImage = function (target) {
+            var image = target.getElementsByTagName('img')[0];
+            image.onload = this._imageLoad.bind(this, target);
+            image.onerror = this._imageError.bind(this, target);
+            var srcValue = image.getAttribute('data-src');
+            image.setAttribute('src', srcValue);
+        };
+        // Inicializa la imagen encadenando los eventos de la imágen a los callbacks suscriptos.
+        SmartPicture.prototype._initializeImage = function (target) {
+            var image = target.getElementsByTagName('img')[0];
+            image.onload = this._imageLoad.bind(this, target);
+            image.onerror = this._imageError.bind(this, target);
+            var imageStatus = this.getImageStatus(target);
+            if (!imageStatus.hasDataSrcSetAttribute) {
+                if (imageStatus.hasDataSrcAttribute) {
+                    image.setAttribute('src', image.getAttribute('data-src'));
+                }
+            }
+            else {
+                image.setAttribute('srcset', image.getAttribute('data-srcset'));
+            }
+            this.observer.unobserve(target);
+        };
+        // Este método es llamado si la carga de la imagen fue exitosa.
+        SmartPicture.prototype._imageLoad = function (target) {
+            this.imagesLoaded++;
+            requestAnimationFrame(function () {
+                target.classList.add('loaded');
+            });
+            this._triggerEvent('onImageLoad', target);
+        };
+        // Este método es llamado si hubo un problema al cargar la imagen.
+        SmartPicture.prototype._imageError = function (target) {
+            var imageStatus = this.getImageStatus(target);
+            var image = target.getElementsByTagName('img')[0];
+            // Si la librería no tiene soporte y falla una imagen, emite el evento "onImageError", sino reintenta la descarga.
+            if (imageStatus === null) {
+                this._triggerEvent('onImageError', target);
+            }
+            else {
+                imageStatus.retryAttempts++;
+                if (imageStatus.retryAttempts <= this.getConfig().retryAttempts) {
+                    setTimeout(this._retryRequest.bind(this, image, imageStatus.hasDataSrcSetAttribute, imageStatus.hasDataSrcAttribute), this.getConfig().retryDelayInMS);
+                }
+                else {
+                    this._triggerEvent('onImageError', target);
+                }
+            }
+        };
+        // Permite reintentar la descarga de la imagen-
+        SmartPicture.prototype._retryRequest = function (image, hasDataSrcSetAttribute, hasDataSrcAttribute) {
+            if (hasDataSrcSetAttribute) {
+                image.removeAttribute('srcset');
+                image.setAttribute('srcset', image.getAttribute('data-srcset'));
+            }
+            else if (hasDataSrcAttribute) {
+                image.removeAttribute('src');
+                image.setAttribute('src', image.getAttribute('data-src'));
+            }
+        };
+        // Permite suscribirse a eventos los cuales serán agregados en un diccionario.
+        SmartPicture.prototype.subscribe = function (event, callback) {
+            if (!(event in this.eventListeners)) {
+                this.eventListeners[event] = [];
+            }
+            this.eventListeners[event].push(callback);
+        };
+        // Permite forzar la descarga de imagenes.
+        SmartPicture.prototype.forceDownload = function (imageFrom, imagesLength) {
+            var _this = this;
+            if (imagesLength === void 0) { imagesLength = 1; }
+            var pictures = Array.prototype.slice.call(this.images);
+            var picturesRange = pictures.slice(imageFrom, imageFrom + imagesLength);
+            picturesRange.forEach(function (target) {
+                _this._initializeImage(target);
+            });
+        };
+        // Permite disparar algun evento ya suscripto.
+        SmartPicture.prototype._triggerEvent = function (event, data) {
+            if (event in this.eventListeners) {
+                var eventCallbacks = this.eventListeners[event];
+                for (var _i = 0, eventCallbacks_1 = eventCallbacks; _i < eventCallbacks_1.length; _i++) {
+                    var callback = eventCallbacks_1[_i];
+                    callback(data);
+                }
+            }
+        };
+        SmartPicture.prototype.getImageStatus = function (image) {
+            return (this._imageStatus !== null) ? this._imageStatus.get(image) : null;
+        };
+        SmartPicture.prototype.setImageStatus = function (image, status) {
+            this._imageStatus.set(image, status);
+        };
+        SmartPicture.prototype.setConfig = function (config) {
+            this._config = config;
+        };
+        SmartPicture.prototype.getConfig = function () {
+            return this._config;
+        };
+        Object.defineProperty(SmartPicture.prototype, "images", {
+            get: function () {
+                return this._images;
+            },
+            set: function (images) {
+                this._images = images;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(SmartPicture.prototype, "imagesLoaded", {
+            get: function () {
+                return this._imagesLoaded;
+            },
+            set: function (imagesLoaded) {
+                this._imagesLoaded = imagesLoaded;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(SmartPicture.prototype, "observer", {
+            get: function () {
+                return this._observer;
+            },
+            set: function (observer) {
+                this._observer = observer;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(SmartPicture.prototype, "eventListeners", {
+            get: function () {
+                return this._eventListeners;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        return SmartPicture;
+    }());
+
+    var pictureElements = document.querySelectorAll( '.smart-picture' );
+    var config = {
+        rootMargin: '20px 20px'
+    };
+    var spic = new SmartPicture( pictureElements, config );
+
+    spic.subscribe( 'onImageLoad', function ( pictureElement ) {
+        pictureElement.parentElement.classList.add( 'img-loaded' );
+    });
+    
+    return spic;
+});

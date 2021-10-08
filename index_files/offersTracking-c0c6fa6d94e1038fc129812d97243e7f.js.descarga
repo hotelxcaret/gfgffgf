@@ -1,0 +1,59 @@
+define(["EventTrackking"], function (EventTracking) {
+    var addOffersViewEvent = function (selector, upaData) {
+        try{
+            var rows = [];
+            var dom_rows = document.querySelectorAll(selector);
+            for (var i = 0; i < dom_rows.length; i++) {
+                var rowNumber;
+                var visibleModule;
+                var offers = [];
+                // var dom_offers = dom_rows[i].querySelectorAll(".offer[meta-data]:not([meta-data=\"\"]");
+                var dom_offers = dom_rows[i].querySelectorAll(".offer[meta-data]");
+    
+                for (var x = 0; x < dom_offers.length; x++) {
+                    const metaDataQuerySelector = dom_offers[x].getAttribute("meta-data");
+                    if (metaDataQuerySelector && metaDataQuerySelector !== ''){
+                        const metaData = JSON.parse(metaDataQuerySelector);
+                        if( !!metaData.offerTrackingData ){
+                            var data = [];
+                            Object.keys(metaData.offerTrackingData ).forEach(function (key) {
+                                data.push({
+                                    "field" : key,
+                                    "value" : metaData.offerTrackingData[key]
+                                })
+                            });
+        
+                            offers.push({
+                                "product": metaData.product,
+                                "position": x+1,
+                                "data":data
+                            });
+                        }
+                        else{
+                            offers.push({
+                                "product": metaData.product,
+                                "position": x+1
+                            });
+                        }
+                        rowNumber = metaData.rowNumber;
+                        visibleModule = metaData.visibleModule;
+                    }
+                }
+                rows.push({
+                    "rowNumber" : rowNumber,
+                    "visible_module": visibleModule,
+                    "offers": offers
+                });
+            }
+            window.tt("landing_offers", {
+                "eventtype" : "view",
+                "pageview_id" : upaData.pageview_id,
+                "rows" : rows
+            });
+        } catch (err) {}
+    };
+
+    return {
+        "addOffersViewEvent"  :addOffersViewEvent
+    };
+});

@@ -1,0 +1,23 @@
+let trackWebVitals = (ltype, lname, appVersion) => {
+    webVitals.getCLS((metric) => this._trackWebVital(metric, ltype, lname, appVersion));
+    webVitals.getFID((metric) => this._trackWebVital(metric, ltype, lname, appVersion));
+    webVitals.getLCP((metric) => this._trackWebVital(metric, ltype, lname, appVersion));
+};
+
+function _trackWebVital(metric, ltype, lname, appVersion) {
+    let data = {
+        ltype: ltype,
+        lname: lname,
+        webVitalName: metric.name,
+        webVitalValue: metric.value,
+        appVersion: appVersion
+    };
+
+    if (typeof newrelic != "undefined") {
+        newrelic.addPageAction("web-vitals", data);
+    }
+}
+
+addEventListener('DOMContentLoaded', function() {
+    trackWebVitals(upaData.ltype, upaData.lname, appVersion);
+});

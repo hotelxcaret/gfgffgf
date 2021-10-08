@@ -1,0 +1,149 @@
+define(["jquery", "SliderManager","EventTrackking", "multipleDatesModal", "offersTracking", "utils", "sliderV2"], function(
+    $,
+    SliderManager,
+    EventTracking,
+    multipleDatesModal,
+    offersTracking,
+    Utils,
+    SliderV2
+) {
+
+    /**
+     * init Function
+     */
+    function init(upaData, isMobile, primary_currency, secondary_currency, messages) {
+        var eventTracking = new EventTracking();
+        // inicialización de sliders ------------
+        var first_breakpoint = 1024;
+        var second_breakpoint = 1366;
+        var max_offers_in_first_row_first_segment = 4;
+        var max_offers_in_first_row_second_segment = 4;
+        var $window = $(window);
+        const screenType = Utils.getScreenType();
+
+        function isSliderEnabled(event) {
+            return event.window_width < first_breakpoint;
+        }
+
+        SliderManager.prototype._showDots = isSliderEnabled;
+        SliderManager.prototype._isEnabled = isSliderEnabled;
+        SliderManager.prototype._showArrows = function () {
+            return false
+        };
+
+        var dom_sliders = document.querySelectorAll(".slider");
+        for (var i = 0; i < dom_sliders.length; i++) {
+            var slider_manager = new SliderManager(dom_sliders[i]);
+            slider_manager.create();
+        }
+
+        function recursiveSearchElement(el, tag) {
+            while (el.parentNode) {
+                el = el.parentNode;
+                if (el.tagName === tag)
+                    return el;
+            }
+            return null;
+        }
+
+        //Evento en tópico custom sobre la view de la landing
+        offersTracking.addOffersViewEvent(".row", upaData);
+
+        // rows de ofertas ------------
+        var dom_rows = document.querySelectorAll(".row");
+        for (var i = 0; i < dom_rows.length; i++) {
+            (function (dom_row) {
+
+                // evento en botón "ver más"
+                dom_row.querySelector(".see-more-button").addEventListener("click", function (event) {
+                    if (dom_row.classList.contains("-one-row")) {
+                        dom_row.classList.remove("-one-row");
+                        const element = recursiveSearchElement(event.srcElement, "A");
+                        if (element) {
+                            const trackingData = JSON.parse(element.getAttribute("meta-data"));
+                            trackingData && eventTracking.track("user-action", `Landing-${trackingData['upa']['ltype']}`, 'click_see_more', trackingData['label']);
+                        }
+                    } else {
+                        dom_row.classList.add("-one-row");
+                    }
+                }, false);
+
+               var dom_offers = dom_row.querySelectorAll(".offer[meta-data]");
+               for (var i = 0; i < dom_offers.length; i++) {
+                   (function (dom_offer) {
+                       const metaDataQuerySelector = dom_offer.getAttribute("meta-data");
+                       if (metaDataQuerySelector && metaDataQuerySelector !== ''){
+                           dom_offer.addEventListener("click", function (event) {
+                               const metaData = JSON.parse(metaDataQuerySelector);
+                               multipleDatesModal.openModal("#multiple-dates-modal", upaData, metaData.dates, isMobile, metaData.link, metaData.offerType, metaData.product, metaData.track, primary_currency, secondary_currency, messages);
+                           });
+                       }
+                   }(dom_offers[i]))
+               }
+
+                // inicializar tipo de row
+                var amount_offers = dom_row.querySelectorAll(".offer").length;
+                var max_offers_in_first_row;
+
+                if (first_breakpoint <= $window.width()) {
+                    if ($window.width() < second_breakpoint) {
+                        max_offers_in_first_row = max_offers_in_first_row_first_segment;
+                    } else {
+                        max_offers_in_first_row = max_offers_in_first_row_second_segment;
+                    }
+
+                    if (amount_offers <= max_offers_in_first_row || dom_rows.length === 1) {
+                        dom_row.classList.remove("-one-row");
+                    } else {
+                        dom_row.classList.remove("-all-showed");
+                    }
+                }
+
+            })(dom_rows[i]);
+        }
+
+        // evento en botón "ver otras fechas" en modal
+        var modalViewMoreButton = document.querySelector(".modal-content .eva-3-view-more .view-more-btn-text");
+        if (modalViewMoreButton) {
+            modalViewMoreButton.addEventListener("click", function (event) {
+                const target_url = event.srcElement.getAttribute("href") || "";
+                const trackingData = JSON.parse(event.srcElement.getAttribute("meta-data"));
+                trackingData && eventTracking.track("user-action", trackingData['category'], trackingData['action'], trackingData['label']);
+                window.tt("landing_dates_modal", {
+                    "eventtype": "click",
+                    "target": "button",
+                    "label": "see-more-dates",
+                    "target_url": `${target_url}`,
+                    "pageview_id": `${upaData.pageview_id}`
+                });
+            }, false);
+        }
+
+        $(".linked-banner").on("click", function (event) {
+            if (this.hash !== "") {
+                event.preventDefault();
+                let hash = this.hash;
+                $("html, body").animate({
+                    scrollTop: $(hash).offset().top
+                }, 800, function () {
+                    window.location.hash = hash;
+                });
+            }
+        });
+
+        SliderV2().init({
+            id: '#offers-shared-slider',
+            showDots: screenType === 'MOBILE',
+            showArrows: screenType !== 'MOBILE',
+            spaceBetween: screenType === 'MOBILE' ? 16 : 24,
+            maxFixedWidth: screenType === 'MOBILE' ? 250 : null,
+            slideBy: 1,
+            itemsToShow: 1
+        });
+    }
+
+    return function (upaData, isMobile, primary_currency, secondary_currency, messages) {
+        init(upaData, isMobile, primary_currency, secondary_currency, messages);
+    };
+  
+});

@@ -1,0 +1,42 @@
+define([
+    "jquery"
+], function($) {
+
+    function extend(data) {
+        var target = {};
+        for(var i = 0; i < data.length; i++) {
+            $.extend(true, target, data[i]);
+        }
+        return target;
+    }
+
+    function Events() {
+        this._events = {};
+
+        this.on = function(name, handler, once) {
+            this._events[name] = this._events[name] || [];
+            this._events[name].push({
+                "handler": handler,
+                "once": once || false
+            });
+        };
+
+        this.once = function(name, handler) {
+            this.on(name, handler, true);
+        };
+
+        this._trigger = function(name, ...data) {
+            var event = extend(data);
+            this._events[name] = this._events[name] || [];
+            for(var i = 0; i < this._events[name].length; i++) {
+                this._events[name][i].handler(event);
+                if(this._events[name][i].once) {
+                    this._events[name].splice(i, 1);
+                }
+            }
+        };
+    }
+
+    return Events;
+
+});

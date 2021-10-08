@@ -1,0 +1,156 @@
+define(["jquery", "EventTrackking"], function ($, EventTracking) {
+
+    var openModal = function (id, upaData, model, isMobile, genericLink, offerType, offerProduct, metaData, primaryCurrency, secondaryCurrency, messages) {
+        if (model === "false" || model === undefined) return;
+        selectDate(upaData, model, isMobile, genericLink, offerType, offerProduct, metaData, primaryCurrency, secondaryCurrency, messages);
+        $(id).addClass("-show-modal");
+    };
+
+    var closeModal = function (id) {
+        $(id).removeClass("-show-modal");
+    };
+    var selectDate = function (upaData, model, isMobile, genericLink, offerType, offerProduct, metaData, primaryCurrency, secondaryCurrency, messages) {
+        var eventTracking = new EventTracking();
+        var modal = $("#multiple-dates-modal");
+        modal.find(".modal-content .selectable-dates").empty();
+        var alternatives = model;
+        var link = genericLink;
+        var secondary_currency_class = `-${secondaryCurrency}`;
+        var currency = primaryCurrency;
+        if (document.querySelector(".-wrapper").classList.contains(secondary_currency_class)) {
+            currency = secondaryCurrency;
+        }
+
+        var modalSelectableDates = modal.find(".modal-content .selectable-dates");
+
+        for (var i = 0; i < alternatives.length; i++) {
+            modalSelectableDates.append(getDate(alternatives[i], currency, isMobile));
+        }
+
+        var product = modal.data("product");
+        if(product){
+            modal.removeClass("-" + product);
+        }
+
+        var modalViewMore = modal.find(".modal-content .eva-3-view-more .view-more-btn-text");
+        var modalHeaderTitle = modal.find(".modal-header h3.modal-title.eva-3-h3");
+
+        modal.data("product", offerType.toLowerCase());
+        modal.addClass("-"+ offerType.toLowerCase());
+
+        if(offerType === 'GETAWAY' || offerType === 'BUNDLE') {
+            modalHeaderTitle.html(messages.selectYourDate);
+        } else{
+            if (link.url === undefined) {
+              modal.find(".modal-content .eva-3-view-more").css('display', 'none');
+            } else {
+              modalViewMore.attr("href", link.url);
+              modalViewMore.attr("title", link.title);
+              modalViewMore.attr("target", "_blank");
+            }
+            if(offerType === 'PACKAGES'){
+                if(alternatives.length === 1) {
+                    modalHeaderTitle.html(messages.offerFound);
+                    modal.find(".modal-header p.modal-text").html(messages.bestPriceForPackage);
+                } else {
+                    modalHeaderTitle.html(messages.offersFound);
+                    modal.find(".modal-header p.modal-text").html(messages.bestPricesForPackage);
+                }
+            }
+        }
+
+        if(metaData){
+            var labelOffer = metaData.label.replace("modulo", "mod_ofer").replace("pos","pos_ofer");
+
+            var metaDataViewMore = {
+                'category': metaData.category,
+                'action': `${metaData.action}-see_more`,
+                'label':`${labelOffer}|tot_dates${alternatives.length}|show_more`
+            }
+            modalViewMore.attr("meta-data", JSON.stringify(metaDataViewMore));
+
+            var dateContainers = modalSelectableDates.find(".date-container")
+
+            dateContainers.each(function(index){
+                $(this).on("click",function(event) {
+                    var target_url = $(this).closest('a').attr("href");
+                    // trackeo el click de cada card de fecha en el modal
+                    window.tu(Object.assign({}, {
+                        "position": (index+1),
+                        "event": "click",
+                        "eventtype": "selection",
+                        "fl": "landing-e",
+                        "product_selected": `${offerProduct}`},
+                        target_url && {"target_url": `${target_url}`})
+                    );
+                    window.tg({
+                        "event": "user-action",
+                        "eventCategory": metaData.category,
+                        "eventAction": `${metaData.action}-click`,
+                        "eventLabel": `${labelOffer}|tot_dates${alternatives.length}|pos_date${index+1}`
+                    });
+
+                    // tópicos
+                    window.tt("landing_dates_modal", {
+                        "eventtype": "click",
+                        "target": "date",
+                        "product": `${offerProduct}`,
+                        "position": (index + 1),
+                        "totalDates": alternatives.length,
+                        "target_url": `${target_url}`,
+                        "pageview_id": `${upaData.pageview_id}`
+                    });
+                });
+            });
+
+            // Trackeo la apertura del modal
+            window.tg({
+                "event": "user-action",
+                "eventCategory": metaData.category,
+                "eventAction": `${metaData.action}-show`,
+                "eventLabel": `${labelOffer}|tot_dates${alternatives.length}`
+            });
+        }
+
+        modal.addClass("-show-modal");
+    };
+    var getDate = function (date, currency, isMobile) {
+        var dateContainer =  document.createElement("a");
+        dateContainer.href = date.link.url;
+        dateContainer.target = "_blank";
+        dateContainer.title = date.link.title;
+        var card =  document.createElement("div");
+        var nights =  document.createElement("div");
+        nights.innerHTML = date.outstanding_text? date.outstanding_text : (date.number_of_nights + messages.nights);
+        nights.className = "date-container__nights";
+        var fromDate =  document.createElement("div");
+        fromDate.innerHTML = date.date_label_from;
+        fromDate.className = "date-container__date date-container__from-date col -sm-6";
+        var toDate =  document.createElement("div");
+        toDate.innerHTML = date.date_label_to;
+        toDate.className = "date-container__date col -sm-6";
+        var finalPrice =  document.createElement("div");
+        finalPrice.innerHTML = date.price[currency].currency_mask + "<span class='eva-3-h3'> " + date.price[currency].total_amount + "</span>";
+        finalPrice.className = "date-container__price";
+        dateContainer.className = "col " + (isMobile ? "-sm-12" : "-sm-6");
+        card.className = "date-container eva-3-card -eva-3-shadow-line";
+        card.append(nights);
+        card.append(fromDate);
+        card.append(toDate);
+        card.append(finalPrice);
+        dateContainer.append(card);
+
+        return dateContainer;
+    };
+
+    var modalCloseButton = $(".modal-close.eva-3-icon-close");
+    if (modalCloseButton) {
+        modalCloseButton.on("click", function (event) {
+            closeModal("#multiple-dates-modal");
+        });
+    }
+
+    return {
+        "openModal"  :openModal
+    };
+});

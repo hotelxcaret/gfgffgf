@@ -1,0 +1,102 @@
+define([
+    "jquery",
+    "slider",
+    "Events",
+], function($, Slider, Events) {
+
+    /**
+     * Permite inicializar y coordinar el slider en diferentes resoluciones, así como agregar más elementos al mismo.
+     */
+
+    var $window = $(window);
+
+    function SliderManager(dom_slider) {
+        Events.call(this);
+        var that = this;
+
+        this._dom_slider = dom_slider;
+        if(!this._dom_slider) throw(new Error("slider dom not found"));
+        this._dom_slider_items = !!this._dom_slider ? this._dom_slider.querySelector(".slider__list") : false;
+        if(!this._dom_slider_items) throw(new Error("slider dom not complete"));
+        this._dom_slider_dots = !!this._dom_slider ? this._dom_slider.querySelector(".slider__dots") : false;
+        if(!this._dom_slider_dots) throw(new Error("slider dom not complete"));
+
+        this._slider = null;
+        this.length = this._dom_slider_items.childNodes.length;
+
+        this._empty = function() {
+            while(this._dom_slider_items.firstChild) {
+                this._dom_slider_items.removeChild(this._dom_slider_items.firstChild);
+            }
+            while(this._dom_slider_dots.firstChild) {
+                this._dom_slider_dots.removeChild(this._dom_slider_dots.firstChild);
+            }
+            this.length = 0;
+        };
+
+        this.fill = function(items, clean) {
+            if(clean) {
+                this._empty();
+            }
+            var page_index = Math.max(this.length - 1, 0);
+            for(var i = 0; i < items.length; i++) {
+                this._dom_slider_items.appendChild(getWrappedItemDOM(items[i]));
+                this._dom_slider_dots.appendChild(getDotDOM());
+            }
+            this.length = this._dom_slider_items.childNodes.length;
+            this.reset(page_index);
+        };
+
+        this.reset = function(initial_page_index) {
+            this.destroy();
+            this.create(initial_page_index);
+        };
+
+        this.destroy = function() {
+            if(this._slider) {
+                // TODO: hideDots y hideArrows, deberían ser manejados por destroy.
+                this._slider.hideDots();
+                this._slider.hideArrows();
+                this._slider.destroy();
+                this._slider = null;
+            }
+        };
+
+        this.create = function(initial_page_index) {
+            var data = {
+                "window_width": $window.width()
+            };
+            if(this._isEnabled(data)) {
+                this._slider = new Slider(this._dom_slider, this._showDots(data), this._showArrows(data), false, initial_page_index || 0);
+
+                this._slider.on("resize", function() {
+                    that.reset();
+                });
+
+                this._slider.on("change", function(event) {
+                    that._trigger("page_index_change", event, data);
+                });
+            } else {
+                $window.one("resize", function() {
+                    that.reset();
+                });
+            }
+        };
+    }
+
+    function getWrappedItemDOM(dom_item) {
+        var dom_wrapper = document.createElement("li");
+        dom_wrapper.classList.add("slider__item", "sld-item-height", "sld-item-width", "sld-item-margin");
+        dom_wrapper.appendChild(dom_item);
+        return dom_wrapper;
+    }
+
+    function getDotDOM() {
+        var dom_dot = document.createElement("li");
+        dom_dot.classList.add("slider__dot");
+        return dom_dot;
+    }
+
+    return SliderManager;
+
+});

@@ -1,0 +1,52 @@
+window.isPageLoaded = false;
+
+window.addEventListener('load', () => {
+  window.isPageLoaded = true;
+  trackLandingVisit();
+  trackLoadPageAction('nymeriaGuiLoad');
+});
+
+window.onbeforeunload = () => {
+  if (!isPageLoaded) {
+    trackLoadPageAction('nymeriaGuiLoadError');
+  }
+};
+
+
+const trackLoadPageAction = (pageActionName) => {
+  if (window.newrelic) {
+    const data = {
+      channel: window.upaData.ch,
+      flow: window.upaData.fl,
+      ltype: window.upaData.ltype,
+      lname: window.upaData.lname,
+      pageviewId: window.upaData.pageview_id,
+      userAgent: navigator.userAgent,
+    }
+    try {
+      window.newrelic.addPageAction(pageActionName, data);
+    } catch (e) {
+    }
+  }
+}
+
+const trackLandingVisit = () => {
+  if (!document.location.host.includes('desa.')) {
+    const data = {
+      ltype: window.upaData.ltype,
+      lname: window.upaData.lname,
+      path: window.location.pathname,
+      lang: window.upaData.lan,
+      country: window.upaData.cc
+    }
+    $.ajax({
+      url: `${document.location.origin}/nymeria-api/landingVisit`,
+      type: 'post',
+      data: JSON.stringify(data),
+      headers: {
+        'Accept': 'application/json', 'Content-Type': 'application/json', 'requesturl': document.location.href
+      },
+      error: (error) => { },
+    });
+  }
+}

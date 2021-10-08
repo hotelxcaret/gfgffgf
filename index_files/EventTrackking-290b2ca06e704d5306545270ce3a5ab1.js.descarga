@@ -1,0 +1,93 @@
+define(["jquery"], function($) {
+
+    // Se llama EventTrackking debido a que Ublock bloquea js con el nombre EventTracking
+    /**
+     * Deprecado
+     * Usar en su lugar las funciones que están en el contexto global para hacer trackeos de eventos a google analytics y a upa.
+     */
+    function EventTracking() {
+
+        this.track = function(eventType, eventCategory, eventAction, eventLabel, eventValue) {
+            var data = {};
+
+            if( window.dataLayer === undefined || typeof window.dataLayer !== "object" ){
+                window.dataLayer = [];
+            }
+
+            if(typeof eventType === "string" && typeof eventCategory === "string" && typeof eventAction === "string") {
+                data = {
+                    "event": eventType,
+                    "eventCategory": eventCategory,
+                    "eventAction": eventAction,
+                };
+
+                if(typeof eventLabel === "string") {
+                    data.eventLabel = eventLabel;
+                }
+
+                if(typeof eventValue === "number") {
+                    data.eventValue = eventValue;
+                }
+
+                dataLayer.push(data);
+            }
+        };
+
+        this.trackUpa = function (upaObj) {
+            upaObj.datetime = new Date().toLocaleString(lang + '-' + country);
+            window.UpaDataTracker.send(upaObj);
+        }
+    }
+
+    // track event upa
+    window.tu = function(data) {
+        if(UpaDataTracker && upaData) {
+            UpaDataTracker.send(Object.assign({}, upaData, data));
+        }
+    };
+
+    // track event google analytics
+    window.tg = function(data) {
+        if(dataLayer) {
+            dataLayer.push(Object.assign({}, data));
+        }
+    };
+
+    // track event custom topic
+    window.tt = function (topicName, data) {
+        $.ajax({
+            url: '/hermes-service/topic/' + topicName,
+            type: 'post',
+            data: JSON.stringify(data),
+            headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+
+            error: function (err) {
+                if( newrelic ) {
+                    newrelic.noticeError("ErrorTrackingCustomTopic", {"topic": topicName, "data": data});
+                }
+            },
+        });
+    }
+
+    // track offer click
+    window.to = function(pr_offer, row_upa, row_ga, pos, tot, target_url, event_action) {
+        tu(Object.assign({}, {"rowNumber": row_upa,
+            "position": pos,
+            "event": "click",
+            "eventtype": "selection",
+            "fl": "landing-e",
+            "product_selected": pr_offer},
+            target_url && {"target_url" : target_url})
+        );
+
+        tg({
+            "eventCategory": "Landing-" + upaData.ltype,
+            "eventAction": event_action || "click_offer",
+            "eventLabel": pr_offer + (row_ga ? "|modulo" + row_ga : "") + "|pos" + pos + (tot ? "|tot" + tot : ""),
+            "event": "user-action"
+        });
+    };
+
+    return EventTracking;
+
+});

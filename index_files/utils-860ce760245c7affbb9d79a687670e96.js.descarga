@@ -1,0 +1,18 @@
+define([], function() {
+    const getScreenType = function() {
+        let screenType;
+        const innerWidth = window.innerWidth;
+        if (innerWidth >= 1024) {
+            screenType = "DESKTOP";
+        } else if (innerWidth >= 768) {
+            screenType = "TABLET";
+        } else {
+            screenType = "MOBILE";
+        }
+        return screenType;
+    };
+
+    return {
+        getScreenType: getScreenType
+    }
+});
